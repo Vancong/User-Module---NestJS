@@ -2,58 +2,59 @@ import { Injectable } from "@nestjs/common";
 import { CreateUserDto } from "./dto/create-user.dto";
 import { ChangePasswordDto } from "./dto/change-password.dto";
 import * as bcrypt from 'bcrypt';
-export interface User {
-    id: number;
-    username:string;
-    email:string;
-    password:string;
-}
+import { InjectRepository } from "@nestjs/typeorm";
+import { User } from "./entities/user.entities";
+import { Repository } from "typeorm";
+
 
 @Injectable()
 export class UserService {
 
-    private users:User[]=[]
+    constructor(
+        @InjectRepository(User)
+        private userRepo: Repository<User>
+    ){}
+
     async createUser(dto:CreateUserDto):Promise<User> {
-       dto.password= await bcrypt.hash(dto.password,10);
-       const user={id:Date.now(),...dto};
-       this.users.push(user);
-       return user;
+       const user=this.userRepo.create({...dto})
+       return await this.userRepo.save(user);
     }
 
-    getDetailUser(id:number):User {
-        const user= this.users.find(user=> user.id===id)
+    async getDetailUser(id:number):Promise<User> {
+        const user= await this.userRepo.findOneBy({id})
         if(!user) {
             throw new Error('User not found');
         }
         return user;
     }
-    getAllUser():User[] {
-        return this.users
+    async getAllUser():Promise<User[]> {
+        return await this.userRepo.find();
     }
 
-    updateUser(id:number,dto:Partial<CreateUserDto>):string {
-        const userIndex=this.users.findIndex(user =>user.id===id)
-        if(userIndex===-1){
+    async updateUser(id:number,dto:Partial<CreateUserDto>):Promise<string> {
+        const user=await this.userRepo.findOneBy({id})
+        if(!user){
             throw new Error('User not found')
         }
-        this.users[userIndex]={...this.users[userIndex],...dto};
+        await this.userRepo.update(id,dto)
         return 'User updated successfully';
     }
 
-    changePassword(id:number,dto: ChangePasswordDto):string {
+    async changePassword(id:number,dto: ChangePasswordDto):Promise<string> {
     
         if(dto.newPassword !== dto.confirmPassword) {
             throw new Error('Password and confirm password do not match');
         }
-        const userIndex=this.users.findIndex(user=> user.id===id);
-        if(userIndex===-1) {
+        const user=await this.userRepo.findOneBy({id});
+        if(!user) {
             throw new Error('User not found');
         }
-        if(this.users[userIndex].password !== dto.oldPassword) {
+        if(user.password !== dto.oldPassword) {
             throw new Error('Old password is incorrect');
         }
 
-        this.users[userIndex].password=dto.newPassword;
+        user.password=dto.newPassword;
+        await await this.userRepo.save(user)
         return 'Password changed successfully';
 
 
